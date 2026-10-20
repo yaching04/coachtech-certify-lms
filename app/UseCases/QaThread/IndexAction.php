@@ -50,6 +50,6 @@ final class IndexAction
             });
         }
 
-        return $query->paginate(20)->withQueryString();
+        return $query->paginate(12)->withQueryString();
     }
 }
