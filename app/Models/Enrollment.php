@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * 担当コーチは Enrollment に直接紐づかず、Certification 経由(certification_coach_assignments、資格 × N コーチ N:N)
  * で参照する。修了は受講生「修了証を受け取る」自己発火で即時 passed 遷移し、admin 承認フローは持たない。
  *
- * 関連: User(受講生) / Certification / Certificate(発行済修了証) / EnrollmentStatusLog / MockExamSession
+ * 関連: User(受講生) / Certification / Certificate(発行済修了証) / EnrollmentStatusLog / MockExamSession / EnrollmentGoal(個人目標)
  * 逆リレーション: defaultedByUser(受講生がデフォルト資格として指している場合のみ存在)
  * scope: learning() / passed() / failed() / forUser(User)(admin = 全件 / coach = 担当資格の Enrollment / student = 自分の Enrollment)
  */
@@ -40,6 +40,16 @@ class Enrollment extends Model
         'current_term',
         'passed_at',
     ];
+
+    protected static function booted(): void
+    {
+        // 受講登録を解除(SoftDelete)したら、配下の個人目標も連動して物理削除する(履歴は残さない)
+        static::deleting(function (Enrollment $enrollment): void {
+            if (! $enrollment->isForceDeleting()) {
+                $enrollment->goals()->delete();
+            }
+        });
+    }
 
     protected $casts = [
         'status' => EnrollmentStatus::class,
@@ -141,6 +151,16 @@ class Enrollment extends Model
     public function learningHourTarget(): HasOne
     {
         return $this->hasOne(LearningHourTarget::class);
+    }
+
+    /**
+     * 受講登録配下の個人目標。表示順が必要な箇所は `EnrollmentGoal::displayOrder()` で並べる。
+     *
+     * @return HasMany<EnrollmentGoal, $this>
+     */
+    public function goals(): HasMany
+    {
+        return $this->hasMany(EnrollmentGoal::class);
     }
 
     public function scopeLearning(Builder $query): Builder

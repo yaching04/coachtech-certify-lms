@@ -12,6 +12,7 @@ use App\Enums\UserStatus;
 use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\Enrollment;
+use App\Models\EnrollmentGoal;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -152,6 +153,69 @@ final class EnrollmentSeeder extends Seeder
                     'changed_reason' => '新規登録',
                 ],
             );
+
+            if ($index === 0) {
+                $this->seedFixedStudentGoals($enrollment);
+            }
+        }
+    }
+
+    /**
+     * 固定 student の 1 件目の受講登録に、達成済 / 未達成 / 期日なしの個人目標を投入する(視覚区別・達成マーク / 解除・編集・削除の確認用)。
+     */
+    private function seedFixedStudentGoals(Enrollment $enrollment): void
+    {
+        $goals = [
+            [
+                'title' => '過去問 5 年分を解き終える',
+                'description' => '分野別に解き直しまで行う。',
+                'target_date' => now()->addDays(30)->toDateString(),
+                'achieved_at' => null,
+            ],
+            [
+                'title' => '第 1 章〜第 3 章のテキストを読み終える',
+                'description' => null,
+                'target_date' => now()->subDays(5)->toDateString(),
+                'achieved_at' => now()->subDays(7),
+            ],
+            [
+                'title' => '苦手分野の総復習',
+                'description' => '模試で正答率が低かった分野を重点的に復習する。',
+                'target_date' => now()->addDays(14)->toDateString(),
+                'achieved_at' => null,
+            ],
+            [
+                'title' => '毎日 30 分は学習時間を確保する',
+                'description' => null,
+                'target_date' => null,
+                'achieved_at' => null,
+            ],
+        ];
+
+        foreach ($goals as $goal) {
+            EnrollmentGoal::firstOrCreate(
+                ['enrollment_id' => $enrollment->id, 'title' => $goal['title']],
+                $goal,
+            );
+        }
+    }
+
+    /**
+     * demo 受講生の受講登録に個人目標を散らす(未達成 1 件 + 達成済 1 件 / 受講登録ごとに交互)。
+     * コーチ / 管理者 / 他受講生からの閲覧の認可分岐を実機確認するための材料。
+     */
+    private function seedDemoGoals(Enrollment $enrollment, int $index): void
+    {
+        EnrollmentGoal::factory()->forEnrollment($enrollment)->create([
+            'title' => '模試で合格点を超える',
+            'target_date' => now()->addDays(20 + $index * 5)->toDateString(),
+        ]);
+
+        if ($index % 2 === 0) {
+            EnrollmentGoal::factory()->forEnrollment($enrollment)->achieved()->create([
+                'title' => '教材を一通り読み終える',
+                'target_date' => now()->subDays(3)->toDateString(),
+            ]);
         }
     }
 
@@ -201,6 +265,7 @@ final class EnrollmentSeeder extends Seeder
             ]);
 
             $this->seedStatusLogs($enrollment, $pattern['state'], $student);
+            $this->seedDemoGoals($enrollment, $i);
 
             if ($pattern['state'] === 'passed') {
                 $this->issueCertificate($enrollment, $passedAt);
