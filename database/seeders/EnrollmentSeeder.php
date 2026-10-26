@@ -13,6 +13,7 @@ use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentGoal;
+use App\Models\EnrollmentNote;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -157,6 +158,8 @@ final class EnrollmentSeeder extends Seeder
             if ($index === 0) {
                 $this->seedFixedStudentGoals($enrollment);
             }
+
+            $this->seedNotes($enrollment, $admin, $index);
         }
     }
 
@@ -220,6 +223,40 @@ final class EnrollmentSeeder extends Seeder
     }
 
     /**
+     * 受講登録にコーチメモを投入する(担当コーチ / 管理者のみが見える内部記録。受講生本人には表示されない)。
+     *
+     * - 担当資格のコーチ全員が 1 件ずつ(複数コーチ担当の資格では「自分のメモ / 他コーチのメモ」が混在し、編集・削除の出し分けを確認できる)
+     * - 管理者のメモを受講登録の並び順 $index が偶数のものに 1 件(管理者の越境操作・自分のメモの確認用)
+     * - 担当外資格の確認用: 固定 student の「日商簿記 2 級」は coach2@ のみ担当のため、coach@ からは閲覧・操作とも拒否される(逆も同様)
+     */
+    private function seedNotes(Enrollment $enrollment, ?User $admin, int $index): void
+    {
+        $coaches = $enrollment->certification()->first()?->coaches()->orderBy('users.created_at')->get() ?? collect();
+
+        $coachBodies = [
+            '最近 chat の応答が遅れ気味。次回面談で学習ペースを確認する。',
+            "Q&A で「ネットワーク層の分類」に躓いていた。\n次回面談で図を使って説明する。",
+            '模試の正答率が先週より改善。苦手分野の復習を継続してもらう。',
+        ];
+
+        foreach ($coaches as $i => $coach) {
+            EnrollmentNote::factory()->forEnrollment($enrollment)->byAuthor($coach)->create([
+                'body' => $coachBodies[($index + $i) % count($coachBodies)],
+                'created_at' => now()->subDays(6 - $i * 2)->subHours($index),
+                'updated_at' => now()->subDays(6 - $i * 2)->subHours($index),
+            ]);
+        }
+
+        if ($admin !== null && ($index % 2 === 0 || $coaches->isEmpty())) {
+            EnrollmentNote::factory()->forEnrollment($enrollment)->byAuthor($admin)->create([
+                'body' => '運営観察: 学習時間は安定している。引き続き経過を見守る。',
+                'created_at' => now()->subDay(),
+                'updated_at' => now()->subDay(),
+            ]);
+        }
+    }
+
+    /**
      * demo 受講生に対し各 status を網羅した受講登録を投入する(admin の status フィルタ・状態遷移ボタンの実機確認用)。
      *
      * @param Collection<int, User> $demoStudents
@@ -266,6 +303,7 @@ final class EnrollmentSeeder extends Seeder
 
             $this->seedStatusLogs($enrollment, $pattern['state'], $student);
             $this->seedDemoGoals($enrollment, $i);
+            $this->seedNotes($enrollment, $admin, $i);
 
             if ($pattern['state'] === 'passed') {
                 $this->issueCertificate($enrollment, $passedAt);

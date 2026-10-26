@@ -15,6 +15,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\EnrollmentGoalController;
 use App\Http\Controllers\EnrollmentManagementController;
+use App\Http\Controllers\EnrollmentNoteController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LearningHourTargetController;
 use App\Http\Controllers\MeetingController;
@@ -114,6 +115,18 @@ Route::middleware(['auth', 'role:student', 'active-learning'])->group(function (
     // 修了証受領(受講生自己発火、graduated は active-learning でブロックされるため新規受領不可)
     Route::post('enrollments/{enrollment}/receive-certificate', [ReceiveCertificateController::class, 'store'])
         ->name('enrollments.receiveCertificate');
+});
+
+// ============================================================
+// コーチメモ(担当コーチ / 管理者のみ。受講生は role ミドルウェアで 403)
+// 一覧・追加フォームは受講登録詳細(enrollments.show)に埋め込み。編集のみ専用ページ。
+// 認可の本体は EnrollmentNotePolicy(追加=担当コーチ/管理者、編集・削除=作成者本人/管理者)。
+// ============================================================
+Route::middleware(['auth', 'role:coach,admin'])->group(function () {
+    Route::post('enrollments/{enrollment}/notes', [EnrollmentNoteController::class, 'store'])->name('enrollments.notes.store');
+    Route::get('enrollment-notes/{note}/edit', [EnrollmentNoteController::class, 'edit'])->name('enrollment-notes.edit');
+    Route::patch('enrollment-notes/{note}', [EnrollmentNoteController::class, 'update'])->name('enrollment-notes.update');
+    Route::delete('enrollment-notes/{note}', [EnrollmentNoteController::class, 'destroy'])->name('enrollment-notes.destroy');
 });
 
 // ============================================================
