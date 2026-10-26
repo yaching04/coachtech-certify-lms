@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Collection;
  * 受講生の自身の受講登録一覧取得 Action。
  *
  * ソート: current_term ASC(基礎ターム → 実践ターム) / exam_date ASC NULLS LAST。
- * eager load: certification.category / certification.coaches / latestStatusLog / 修了証(certificate) を同梱する。
+ * eager load: certification.category / certification.coaches / latestStatusLog / 修了証(certificate) を同梱し、個人目標の件数(goals_count)を付与する。
  */
 final class IndexAction
 {
@@ -23,6 +23,7 @@ final class IndexAction
     {
         return Enrollment::query()
             ->forUser($student)
+            ->withCount('goals')
             ->with([
                 'certification.category',
                 'certification.coaches',
