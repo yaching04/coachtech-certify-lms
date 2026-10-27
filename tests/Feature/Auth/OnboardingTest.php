@@ -322,6 +322,52 @@ class OnboardingTest extends TestCase
         ]);
     }
 
+    public function test_store_returns_422_for_mismatched_password_confirmation(): void
+    {
+        $invitation = $this->freshInvitation();
+
+        $this->postJson($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'different-pass',
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
+
+        $this->assertGuest();
+        $this->assertSame(InvitationStatus::Pending, $invitation->fresh()->status);
+        $this->assertDatabaseHas('users', [
+            'id' => $invitation->user_id,
+            'status' => UserStatus::Invited->value,
+        ]);
+    }
+
+    public function test_store_rejects_missing_password_confirmation(): void
+    {
+        $invitation = $this->freshInvitation();
+
+        $this->postJson($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $invitation->user_id,
+            'status' => UserStatus::Invited->value,
+        ]);
+    }
+
+    public function test_store_succeeds_when_password_confirmation_matches(): void
+    {
+        $invitation = $this->freshInvitation();
+
+        $this->postJson($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'secret-pass',
+        ])->assertRedirect(route('dashboard.index'));
+
+        $this->assertAuthenticatedAs($invitation->user->fresh());
+    }
+
     public function test_store_requires_meeting_url_for_coach_invitation(): void
     {
         $invitation = $this->freshInvitation(role: UserRole::Coach);
