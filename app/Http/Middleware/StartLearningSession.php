@@ -31,7 +31,8 @@ final class StartLearningSession
         $section = $request->route('section');
         $user = $request->user();
 
-        if ($section instanceof Section && $user !== null) {
+        // 403 / 404 などで弾かれた (閲覧できなかった) リクエストではセッションを開始しない
+        if ($section instanceof Section && $user !== null && $response->isSuccessful()) {
             try {
                 ($this->startSession)($user, $section);
             } catch (\Throwable $exception) {
