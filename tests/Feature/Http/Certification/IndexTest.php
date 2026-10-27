@@ -87,6 +87,26 @@ class IndexTest extends TestCase
         $response->assertDontSee('Archived One');
     }
 
+    public function test_status_filter_archived_and_draft_show_only_matching_status(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Certification::factory()->draft()->create(['name' => 'Draft One']);
+        Certification::factory()->published()->create(['name' => 'Published One']);
+        Certification::factory()->archived()->create(['name' => 'Archived One']);
+
+        $this->actingAs($admin)->get(route('admin.certifications.index', ['status' => 'archived']))
+            ->assertOk()
+            ->assertSee('Archived One')
+            ->assertDontSee('Draft One')
+            ->assertDontSee('Published One');
+
+        $this->actingAs($admin)->get(route('admin.certifications.index', ['status' => 'draft']))
+            ->assertOk()
+            ->assertSee('Draft One')
+            ->assertDontSee('Published One')
+            ->assertDontSee('Archived One');
+    }
+
     public function test_category_filter(): void
     {
         $admin = User::factory()->admin()->create();
