@@ -181,6 +181,22 @@ class EnrollmentTest extends TestCase
         $this->assertTrue($results->first()->is($assigned));
     }
 
+    public function test_scope_for_user_coach_excludes_released_assignment(): void
+    {
+        $coach = User::factory()->coach()->create();
+        $cert = Certification::factory()->published()->create();
+        CertificationCoachAssignment::create([
+            'certification_id' => $cert->id,
+            'user_id' => $coach->id,
+            'assigned_by_user_id' => User::factory()->admin()->create()->id,
+            'assigned_at' => now()->subDay(),
+            'unassigned_at' => now(),
+        ]);
+        Enrollment::factory()->for($cert)->create();
+
+        $this->assertCount(0, Enrollment::forUser($coach)->get());
+    }
+
     public function test_scope_for_user_student_returns_only_own_enrollments(): void
     {
         // Arrange
