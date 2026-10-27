@@ -168,6 +168,56 @@ class OnboardingTest extends TestCase
         ]);
     }
 
+    public function test_user_can_log_in_again_after_onboarding(): void
+    {
+        $invitation = $this->freshInvitation();
+        $email = $invitation->user->email;
+
+        $this->post($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'secret-pass',
+        ]);
+        $this->post('/logout');
+        $this->assertGuest();
+
+        $this->post('/login', ['email' => $email, 'password' => 'secret-pass']);
+
+        $this->assertAuthenticatedAs($invitation->user->fresh());
+    }
+
+    public function test_onboarded_student_can_access_plan_features(): void
+    {
+        $invitation = $this->freshInvitation();
+
+        $this->post($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'secret-pass',
+        ]);
+        $this->post('/logout');
+        $this->post('/login', ['email' => $invitation->user->email, 'password' => 'secret-pass']);
+
+        $this->get(route('certifications.index'))->assertOk();
+    }
+
+    public function test_store_records_status_log_from_invited_to_in_progress(): void
+    {
+        $invitation = $this->freshInvitation();
+
+        $this->post($this->postUrl($invitation), [
+            'name' => '受講太郎',
+            'password' => 'secret-pass',
+            'password_confirmation' => 'secret-pass',
+        ]);
+
+        $this->assertDatabaseHas('user_status_logs', [
+            'user_id' => $invitation->user->id,
+            'from_status' => UserStatus::Invited->value,
+            'to_status' => UserStatus::InProgress->value,
+        ]);
+    }
+
     public function test_store_sets_plan_period_from_plan_duration_days(): void
     {
         $plan = $this->plan(durationDays: 120);

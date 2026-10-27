@@ -68,6 +68,7 @@ final class OnboardAction
                 'name' => $validated['name'],
                 'bio' => $validated['bio'] ?? null,
                 'password' => Hash::make($validated['password']),
+                'status' => UserStatus::InProgress,
                 'profile_setup_completed' => true,
                 'email_verified_at' => $now,
             ];
