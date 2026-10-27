@@ -35,8 +35,9 @@ class FailExpiredEnrollmentsCommand extends Command
             ->where('status', EnrollmentStatus::Learning->value)
             ->whereNotNull('exam_date')
             ->whereDate('exam_date', '<', now()->toDateString())
-            ->orderBy('id')
-            ->chunk(100, function ($enrollments) use ($statusChanger, $defaultEnrollmentService, &$count): void {
+            // 処理中に絞り込み条件(status)を更新するため、offset 方式の chunk() ではなく主キーカーソル方式の chunkById() を使う
+            // (chunk() だと処理済みの分だけ取得位置がずれ、2 チャンク目以降を取りこぼす)。1 回に読むのは 100 件で固定。
+            ->chunkById(100, function ($enrollments) use ($statusChanger, $defaultEnrollmentService, &$count): void {
                 foreach ($enrollments as $enrollment) {
                     DB::transaction(function () use ($enrollment, $statusChanger, $defaultEnrollmentService) {
                         $enrollment->update(['status' => EnrollmentStatus::Failed->value]);

@@ -28,8 +28,9 @@ class AutoCompleteMeetingsCommand extends Command
         Meeting::query()
             ->where('status', MeetingStatus::Reserved->value)
             ->where('scheduled_at', '<', now()->subMinutes(60))
-            ->orderBy('id')
-            ->chunk(100, function ($meetings) use ($action, &$count): void {
+            // 処理中に絞り込み条件(status)を更新するため、offset 方式の chunk() ではなく主キーカーソル方式の chunkById() を使う
+            // (chunk() だと処理済みの分だけ取得位置がずれ、2 チャンク目以降を取りこぼす)。1 回に読むのは 100 件で固定。
+            ->chunkById(100, function ($meetings) use ($action, &$count): void {
                 foreach ($meetings as $meeting) {
                     $action($meeting);
                     $count++;
