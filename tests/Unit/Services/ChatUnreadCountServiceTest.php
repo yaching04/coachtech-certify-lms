@@ -147,4 +147,66 @@ class ChatUnreadCountServiceTest extends TestCase
 
         $this->assertSame([], $counts);
     }
+
+    /**
+     * B-B-14: 自分が最終既読より後に送ったメッセージだけが残るルームは、未読 0 / 未読ルームに数えない。
+     *
+     * @return array{0: User, 1: User, 2: ChatRoom}
+     */
+    private function roomWithOnlyOwnMessagesAfterLastRead(): array
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $room = ChatRoom::factory()->for(Enrollment::factory()->for($student)->create())->create();
+        ChatMember::factory()->create([
+            'chat_room_id' => $room->id,
+            'user_id' => $student->id,
+            'last_read_at' => now()->subHour(),
+        ]);
+        ChatMessage::factory()->count(2)->create([
+            'chat_room_id' => $room->id,
+            'sender_user_id' => $student->id,
+            'created_at' => now()->subMinutes(10),
+        ]);
+
+        return [$student, $coach, $room];
+    }
+
+    public function test_own_messages_after_last_read_are_not_counted_in_room(): void
+    {
+        [$student, , $room] = $this->roomWithOnlyOwnMessagesAfterLastRead();
+
+        $this->assertSame(0, app(ChatUnreadCountService::class)->messageCountInRoom($room, $student));
+    }
+
+    public function test_own_messages_after_last_read_are_not_counted_by_room(): void
+    {
+        [$student, , $room] = $this->roomWithOnlyOwnMessagesAfterLastRead();
+
+        $counts = app(ChatUnreadCountService::class)->messageCountsByRoomForUser(collect([$room]), $student);
+
+        $this->assertSame(0, $counts[$room->id]);
+    }
+
+    public function test_room_with_only_own_unread_messages_is_not_counted_in_sidebar_badge(): void
+    {
+        [$student] = $this->roomWithOnlyOwnMessagesAfterLastRead();
+
+        $this->assertSame(0, app(ChatUnreadCountService::class)->roomCountForUser($student));
+    }
+
+    public function test_partner_message_after_own_message_is_still_counted_as_unread(): void
+    {
+        [$student, $coach, $room] = $this->roomWithOnlyOwnMessagesAfterLastRead();
+        ChatMessage::factory()->create([
+            'chat_room_id' => $room->id,
+            'sender_user_id' => $coach->id,
+            'created_at' => now()->subMinutes(5),
+        ]);
+        $service = app(ChatUnreadCountService::class);
+
+        $this->assertSame(1, $service->messageCountInRoom($room, $student));
+        $this->assertSame(1, $service->messageCountsByRoomForUser(collect([$room]), $student)[$room->id]);
+        $this->assertSame(1, $service->roomCountForUser($student));
+    }
 }
