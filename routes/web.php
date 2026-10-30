@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
 use App\Http\Controllers\CertificationCatalogController;
@@ -155,6 +156,7 @@ Route::middleware('auth')
     ->group(function () {
         Route::get('/', [NotificationController::class, 'index'])->name('index');
         Route::post('read-all', [NotificationController::class, 'markAllAsRead'])->name('markAllAsRead');
+        Route::get('{notification}', [NotificationController::class, 'show'])->name('show');
         Route::post('{notification}/read', [NotificationController::class, 'markAsRead'])->name('markAsRead');
     });
 
@@ -272,6 +274,12 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
         ->name('admin.plans.archive');
     Route::post('plans/{plan}/unarchive', [PlanController::class, 'unarchive'])
         ->name('admin.plans.unarchive');
+
+    // 運営お知らせ配信(配信履歴の閲覧 + 即時配信。配信は不可逆のため編集 / 削除 / 再配信ルートは設けない)
+    Route::resource('announcements', AnnouncementController::class)
+        ->only(['index', 'create', 'store', 'show'])
+        ->parameters(['announcements' => 'announcement'])
+        ->names('admin.announcements');
 });
 
 // ============================================================

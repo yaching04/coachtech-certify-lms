@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * database に保存する data は以下で固定し、一覧・既読化・遷移はこの data だけで完結させる。
  * - notification_type: 種別(NotificationType の value。一覧のアイコン出し分けに使う)
  * - title / message: 一覧に表示するタイトル・本文要約
- * - url: 既読化後の遷移先(アプリ内の相対パス)。遷移先を持たない通知は null
+ * - url: 既読化後の遷移先(アプリ内の相対パス)。遷移先を持たない通知は null(通知詳細ページで全文を読む)
  *
  * 送信先の絞り込み(ロール・利用状態)は NotificationDispatchService が行うため、ここでは扱わない。
  */
@@ -63,8 +63,23 @@ abstract class AppNotification extends Notification
             ->subject('【Certify LMS】'.$this->title())
             ->greeting($notifiable->name.' 様')
             ->line($this->message())
-            ->action('Certify LMS で確認する', url($this->url() ?? route('notifications.index', [], false)))
+            ->action('Certify LMS で確認する', $this->actionUrl())
             ->salutation('Certify LMS 運営チーム');
+    }
+
+    /**
+     * メールのボタンの遷移先。業務画面を持たない通知は通知詳細ページ(送信時に採番される通知 ID)へ誘導する。
+     */
+    protected function actionUrl(): string
+    {
+        $url = $this->url();
+        if ($url !== null) {
+            return url($url);
+        }
+
+        return $this->id !== null
+            ? route('notifications.show', $this->id)
+            : route('notifications.index');
     }
 
     protected function summarize(string $text): string

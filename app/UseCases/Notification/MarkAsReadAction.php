@@ -11,6 +11,7 @@ use Illuminate\Notifications\DatabaseNotification;
  *
  * 遷移先は通知作成時に data.url へ保存したアプリ内相対パス。遷移先の資格が非公開になった等で
  * 閲覧できなくなっていても既読化は行い、遷移先側の認可にそのまま任せる(取り消し・特別表示はしない)。
+ * 遷移先を持たない通知(運営お知らせ等)は通知詳細ページへ遷移させ、本文全文を表示する。
  */
 final class MarkAsReadAction
 {
@@ -25,6 +26,6 @@ final class MarkAsReadAction
             return $url;
         }
 
-        return route('notifications.index', [], false);
+        return route('notifications.show', $notification, false);
     }
 }

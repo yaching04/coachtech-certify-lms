@@ -8,16 +8,17 @@ use App\Http\Requests\Notification\IndexRequest;
 use App\UseCases\Notification\IndexAction;
 use App\UseCases\Notification\MarkAllAsReadAction;
 use App\UseCases\Notification\MarkAsReadAction;
+use App\UseCases\Notification\ShowAction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\View\View;
 
 /**
- * アプリ内通知の一覧・既読化(全ロール共通・本人の通知のみ)。
+ * アプリ内通知の一覧・詳細・既読化(全ロール共通・本人の通知のみ)。
  *
  * 卒業済の受講生も過去の通知一覧を閲覧できるよう、ルートには active-learning を付けない。
- * 他人宛の通知の既読化は NotificationPolicy で 403 にする。
+ * 他人宛の通知の閲覧・既読化は NotificationPolicy で 403 にする。
  */
 class NotificationController extends Controller
 {
@@ -30,6 +31,15 @@ class NotificationController extends Controller
             'notifications' => $action($user, $tab),
             'tab' => $tab,
             'unreadCount' => $action->unreadCount($user),
+        ]);
+    }
+
+    public function show(DatabaseNotification $notification, ShowAction $action): View
+    {
+        $this->authorize('view', $notification);
+
+        return view('notifications.show', [
+            'notification' => $action($notification),
         ]);
     }
 

@@ -20,7 +20,7 @@ use Tests\TestCase;
  *
  * - 自分の通知は既読にして data.url へリダイレクトする
  * - 他人の通知は 403 で既読にならない
- * - url が無い / 外部 URL の場合は通知一覧へ戻す(オープンリダイレクト防止)
+ * - url が無い / 外部 URL の場合は通知詳細ページへ遷移する(オープンリダイレクト防止)
  * - 遷移先が公開停止になっていても既読にはなり、遷移先の閲覧可否は遷移先の認可に従う
  */
 class MarkAsReadTest extends TestCase
@@ -66,7 +66,7 @@ class MarkAsReadTest extends TestCase
         $this->assertNull($notification->fresh()->read_at);
     }
 
-    public function test_falls_back_to_index_when_url_is_missing_or_external(): void
+    public function test_falls_back_to_show_when_url_is_missing_or_external(): void
     {
         $student = User::factory()->student()->inProgress()->create();
         $noUrl = $this->createNotification($student, null);
@@ -76,7 +76,7 @@ class MarkAsReadTest extends TestCase
         foreach ([$noUrl, $external, $protocolRelative] as $notification) {
             $this->actingAs($student)
                 ->post(route('notifications.markAsRead', $notification))
-                ->assertRedirect(route('notifications.index', [], false));
+                ->assertRedirect(route('notifications.show', $notification, false));
             $this->assertNotNull($notification->fresh()->read_at);
         }
     }
