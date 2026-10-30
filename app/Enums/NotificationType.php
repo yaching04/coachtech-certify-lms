@@ -15,6 +15,7 @@ enum NotificationType: string
     case MeetingReserved = 'meeting_reserved';
     case MeetingCanceled = 'meeting_canceled';
     case AdminAnnouncement = 'admin_announcement';
+    case MeetingReminder = 'meeting_reminder';
 
     public function label(): string
     {
@@ -24,6 +25,7 @@ enum NotificationType: string
             self::MeetingReserved => '面談予約',
             self::MeetingCanceled => '面談キャンセル',
             self::AdminAnnouncement => '運営からのお知らせ',
+            self::MeetingReminder => '面談リマインダー',
         };
     }
 }
