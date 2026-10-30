@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 質問掲示板(qa-board)の質問スレッドを表す Model。
  *
  * 関連: Certification(紐付け資格) / User(投稿者 = 受講生) / QaReply(回答)
- * scope: visibleTo(User)(admin = 全件 / coach = 担当かつ公開中資格 / student = 公開中資格) / keyword(?string)(タイトル・本文の部分一致)
+ * scope: visibleTo(User)(admin = 全件 / coach = 担当かつ公開中資格 / student = 公開中資格) / keyword(?string)(タイトル・本文・回答本文の部分一致)
  */
 class QaThread extends Model
 {
@@ -94,7 +94,10 @@ class QaThread extends Model
     }
 
     /**
-     * タイトル・本文の部分一致で絞り込む。
+     * スレッドのタイトル・本文、または配下の回答(返信)本文の部分一致で絞り込む。
+     *
+     * 回答は EXISTS 副問い合わせ(whereHas)で判定するため、複数の回答が一致してもスレッドは重複しない。
+     * 外側を where(Closure) で括るので、資格 / 解決状態など他の絞り込み条件とは AND で結合される。
      *
      * @param Builder<QaThread> $query
      *
@@ -109,7 +112,10 @@ class QaThread extends Model
         $like = '%'.addcslashes($keyword, '%_\\').'%';
 
         return $query->where(
-            fn (Builder $q) => $q->where('title', 'LIKE', $like)->orWhere('body', 'LIKE', $like),
+            fn (Builder $q) => $q
+                ->where('title', 'LIKE', $like)
+                ->orWhere('body', 'LIKE', $like)
+                ->orWhereHas('replies', fn (Builder $r) => $r->where('body', 'LIKE', $like)),
         );
     }
 

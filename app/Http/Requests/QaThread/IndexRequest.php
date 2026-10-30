@@ -13,7 +13,7 @@ use Illuminate\Validation\Rule;
  *
  * - certification_id: 資格で絞り込み(閲覧範囲外の資格を指定しても scopeVisibleTo で 0 件になるだけ)
  * - status: '' = すべて / unresolved = 未解決 / resolved = 解決済
- * - keyword: タイトル・本文の部分一致
+ * - keyword: スレッドのタイトル・本文・回答本文の部分一致
  */
 class IndexRequest extends FormRequest
 {

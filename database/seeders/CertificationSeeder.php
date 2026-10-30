@@ -140,7 +140,7 @@ final class CertificationSeeder extends Seeder
                 'name' => '販売終了: Webクリエイター能力認定試験',
                 'category_id' => $categories->get('design')->id,
                 'difficulty' => CertificationDifficulty::Beginner->value,
-                'description' => '提供終了。既存受講生の学習継続は可能。',
+                'description' => '提供終了。既存受講生も教材を閲覧できません。',
                 'created_by_user_id' => $admin->id,
                 'updated_by_user_id' => $admin->id,
             ])
