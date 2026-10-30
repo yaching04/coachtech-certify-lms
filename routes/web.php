@@ -27,6 +27,7 @@ use App\Http\Controllers\MockExamController;
 use App\Http\Controllers\MockExamQuestionController;
 use App\Http\Controllers\MockExamSessionController;
 use App\Http\Controllers\MockExamSessionMonitorController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PartController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\QaReplyController;
@@ -143,6 +144,18 @@ Route::middleware('auth')
         Route::post('avatar', [SettingsAvatarController::class, 'store'])->name('avatar.store');
         Route::delete('avatar', [SettingsAvatarController::class, 'destroy'])->name('avatar.destroy');
         Route::put('password', [SettingsPasswordController::class, 'update'])->name('password.update');
+    });
+
+// ============================================================
+// 通知(全ロール共通・本人の通知のみ。卒業済み受講生も過去の通知を閲覧できるため active-learning は付けない)
+// ============================================================
+Route::middleware('auth')
+    ->prefix('notifications')
+    ->name('notifications.')
+    ->group(function () {
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::post('read-all', [NotificationController::class, 'markAllAsRead'])->name('markAllAsRead');
+        Route::post('{notification}/read', [NotificationController::class, 'markAsRead'])->name('markAsRead');
     });
 
 // ============================================================

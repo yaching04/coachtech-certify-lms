@@ -7,6 +7,7 @@ namespace App\Providers;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,9 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
+
+        // アプリ内通知(Laravel 標準の DatabaseNotification)を {notification} で解決する。本人宛かどうかは NotificationPolicy で判定
+        Route::model('notification', DatabaseNotification::class);
 
         $this->routes(function () {
             Route::middleware('api')
