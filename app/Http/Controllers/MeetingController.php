@@ -20,9 +20,12 @@ use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\MeetingMemo;
 use App\Models\User;
+use App\Notifications\MeetingCanceledNotification;
+use App\Notifications\MeetingReservedNotification;
 use App\Services\CoachMeetingLoadService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
+use App\Services\NotificationDispatchService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
 use App\UseCases\MeetingQuota\RefundQuotaAction;
 use Carbon\Carbon;
@@ -167,6 +170,7 @@ class MeetingController extends Controller
         CoachMeetingLoadService $coachLoadService,
         MeetingQuotaService $quotaService,
         ConsumeQuotaAction $consumeAction,
+        NotificationDispatchService $notifier,
     ): RedirectResponse {
         $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
         $topic = $request->validated('topic');
@@ -216,6 +220,9 @@ class MeetingController extends Controller
             return $meeting->fresh();
         });
 
+        // 予約確定後、自動割当されたコーチへ予約通知を送る(通知失敗で予約自体はエラーにしない)
+        $notifier->sendQuietly([$meeting->coach], new MeetingReservedNotification($meeting));
+
         return redirect()
             ->route('meetings.show', $meeting)
             ->with('success', '面談を予約しました。');
@@ -228,12 +235,13 @@ class MeetingController extends Controller
     public function cancel(
         Meeting $meeting,
         RefundQuotaAction $refundAction,
+        NotificationDispatchService $notifier,
     ): RedirectResponse {
         $this->authorize('cancel', $meeting);
 
         $actor = auth()->user();
 
-        DB::transaction(function () use ($meeting, $actor, $refundAction) {
+        $canceled = DB::transaction(function () use ($meeting, $actor, $refundAction) {
             $locked = Meeting::query()->whereKey($meeting->id)->lockForUpdate()->first();
             if ($locked === null || $locked->status !== MeetingStatus::Reserved) {
                 throw MeetingStatusTransitionException::forCancel();
@@ -251,7 +259,13 @@ class MeetingController extends Controller
 
             // 消費した面談回数 1 回分を、予約した受講生に返却する(コーチがキャンセルした場合も受講生へ返す)
             ($refundAction)($locked->student, $locked->id);
+
+            return $locked->fresh(['student', 'coach', 'canceledBy']);
         });
+
+        // キャンセル確定後、キャンセルしなかった側の当事者へ通知する
+        $counterpart = $canceled->student_id === $actor->id ? $canceled->coach : $canceled->student;
+        $notifier->sendQuietly([$counterpart], new MeetingCanceledNotification($canceled));
 
         return redirect()
             ->route('meetings.show', $meeting)
