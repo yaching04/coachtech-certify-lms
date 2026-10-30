@@ -79,8 +79,10 @@ Route::middleware('auth')->group(function () {
     // 認可は EnrollmentPolicy::viewAny / view で 3 ロール対応済。閲覧範囲は EnrollmentController で
     // ロール別 eager-load + Blade の @can / @if で UI を出し分ける。
     Route::get('enrollments', [EnrollmentController::class, 'index'])->name('enrollments.index');
+    // 修了(graduated)した受講生は詳細画面(個人目標の一覧を含む)に入れない。コーチ / 管理者は対象外(`students` 指定)。
     Route::get('enrollments/{enrollment}', [EnrollmentController::class, 'show'])
         ->withTrashed()
+        ->middleware('active-learning:students')
         ->name('enrollments.show');
 });
 

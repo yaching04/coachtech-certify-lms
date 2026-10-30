@@ -13,6 +13,18 @@ class UnpublishTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_confirm_dialog_says_existing_students_can_no_longer_view_materials(): void
+    {
+        // PM 確認の回答: 既存の受講生も教材を閲覧できなくなるため、「学習継続には影響しません」と案内してはいけない
+        $admin = User::factory()->admin()->create();
+        $cert = Certification::factory()->published()->create();
+
+        $this->actingAs($admin)->get(route('admin.certifications.show', $cert))
+            ->assertOk()
+            ->assertSee('既存の受講生も教材を閲覧できなくなります')
+            ->assertDontSee('既存受講生の学習継続には影響しません');
+    }
+
     public function test_admin_unpublishes_published_certification(): void
     {
         $admin = User::factory()->admin()->create();

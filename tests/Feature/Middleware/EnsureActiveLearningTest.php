@@ -29,6 +29,10 @@ class EnsureActiveLearningTest extends TestCase
         Route::middleware(['auth', EnsureActiveLearning::class])
             ->get('/__test/ensure-active-learning', fn () => 'ok')
             ->name('__test.ensure-active-learning');
+
+        Route::middleware(['auth', EnsureActiveLearning::class.':students'])
+            ->get('/__test/ensure-active-learning-students', fn () => 'ok')
+            ->name('__test.ensure-active-learning-students');
     }
 
     public function test_in_progress_student_passes(): void
@@ -90,5 +94,18 @@ class EnsureActiveLearningTest extends TestCase
     {
         $this->get('/__test/ensure-active-learning')
             ->assertRedirect('/login');
+    }
+
+    public function test_students_scope_forbids_non_active_students_but_not_staff(): void
+    {
+        $graduated = User::factory()->student()->graduated()->create();
+        $inProgress = User::factory()->student()->inProgress()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $admin = User::factory()->admin()->inProgress()->create();
+
+        $this->actingAs($graduated)->get('/__test/ensure-active-learning-students')->assertForbidden();
+        $this->actingAs($inProgress)->get('/__test/ensure-active-learning-students')->assertOk();
+        $this->actingAs($coach)->get('/__test/ensure-active-learning-students')->assertOk();
+        $this->actingAs($admin)->get('/__test/ensure-active-learning-students')->assertOk();
     }
 }

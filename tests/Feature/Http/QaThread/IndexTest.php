@@ -88,9 +88,65 @@ class IndexTest extends TestCase
         $this->assertEqualsCanonicalizing([$openA->id, $resolvedA->id], $ids(['certification_id' => $certA->id]));
         $this->assertSame([$openA->id], $ids(['certification_id' => $certA->id, 'status' => 'unresolved']));
         $this->assertSame([$resolvedA->id], $ids(['certification_id' => $certA->id, 'status' => 'resolved']));
-        // キーワードはタイトル・本文の部分一致
+        // キーワードはタイトル・本文・回答本文の部分一致
         $this->assertEqualsCanonicalizing([$openA->id, $resolvedA->id], $ids(['certification_id' => $certA->id, 'keyword' => 'サブネット']));
         $this->assertSame([], $ids(['keyword' => '存在しない語']));
+    }
+
+    public function test_keyword_also_matches_reply_body_without_duplicates(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $certA = Certification::factory()->published()->create();
+        $certB = Certification::factory()->published()->create();
+        // タイトル・本文には無く、回答本文にだけキーワードがある(回答が 2 件ヒットしても 1 スレッドとして 1 回だけ出る)
+        $byReply = QaThread::factory()->forCertification($certA)->open()->create(['title' => 'A の質問', 'body' => '本文']);
+        QaReply::factory()->forThread($byReply)->create(['body' => 'ルーティングテーブルを確認してください']);
+        QaReply::factory()->forThread($byReply)->create(['body' => 'ルーティングの設定も見直しましょう']);
+        // タイトルだけ・本文だけ・無関係
+        $byTitle = QaThread::factory()->forCertification($certA)->resolved()->create(['title' => 'ルーティングとは', 'body' => '本文']);
+        $byBody = QaThread::factory()->forCertification($certA)->open()->create(['title' => '別の質問', 'body' => 'ルーティングが分かりません']);
+        QaThread::factory()->forCertification($certA)->open()->create(['title' => '無関係', 'body' => '無関係']);
+        // 他資格のスレッドの回答にヒットしても、資格で絞れば出ない
+        $otherCert = QaThread::factory()->forCertification($certB)->open()->create(['title' => 'B の質問', 'body' => '本文']);
+        QaReply::factory()->forThread($otherCert)->create(['body' => 'ルーティングの話']);
+
+        $ids = fn (array $query) => $this->actingAs($student)
+            ->get(route('qa-board.index', $query))
+            ->assertOk()
+            ->viewData('threads')->pluck('id')->sort()->values()->all();
+
+        $this->assertEqualsCanonicalizing(
+            [$byReply->id, $byTitle->id, $byBody->id, $otherCert->id],
+            $ids(['keyword' => 'ルーティング']),
+        );
+        // 資格・解決状態の絞り込みとは AND
+        $this->assertEqualsCanonicalizing([$byReply->id, $byTitle->id, $byBody->id], $ids(['keyword' => 'ルーティング', 'certification_id' => $certA->id]));
+        $this->assertSame([$byReply->id], $ids(['keyword' => 'ルーティングテーブル', 'certification_id' => $certA->id, 'status' => 'unresolved']));
+        $this->assertSame([], $ids(['keyword' => 'ルーティングテーブル', 'status' => 'resolved']));
+    }
+
+    public function test_reply_keyword_search_escapes_like_wildcards(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $cert = Certification::factory()->published()->create();
+        $hit = QaThread::factory()->forCertification($cert)->create(['title' => 'x', 'body' => 'y']);
+        QaReply::factory()->forThread($hit)->create(['body' => '正答率は100%です']);
+        $miss = QaThread::factory()->forCertification($cert)->create(['title' => 'x2', 'body' => 'y2']);
+        QaReply::factory()->forThread($miss)->create(['body' => '正答率は100点です']);
+
+        $ids = $this->actingAs($student)->get(route('qa-board.index', ['keyword' => '100%']))
+            ->viewData('threads')->pluck('id')->all();
+
+        $this->assertSame([$hit->id], $ids);
+    }
+
+    public function test_keyword_input_shows_updated_placeholder(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+
+        $this->actingAs($student)->get(route('qa-board.index'))
+            ->assertOk()
+            ->assertSee('質問のタイトル・本文・回答を検索', false);
     }
 
     public function test_keyword_escapes_like_wildcards(): void

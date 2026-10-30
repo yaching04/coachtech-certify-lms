@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\EnrollmentGoal;
 
+use App\Enums\UserStatus;
 use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentGoal;
@@ -126,6 +127,27 @@ class CrudTest extends TestCase
     {
         $this->post(route('enrollments.goals.store', $this->enrollment), ['title' => 'x'])
             ->assertRedirect(route('login'));
+    }
+
+    public function test_graduated_student_cannot_open_enrollment_detail_or_operate_goals(): void
+    {
+        // PM 確認の回答: 修了済みの受講生は受講登録の詳細画面自体に入れず、個人目標の閲覧・操作にも到達しない
+        $this->student->update(['status' => UserStatus::Graduated]);
+        $goal = $this->goal();
+
+        $this->actingAs($this->student)->get(route('enrollments.show', $this->enrollment))->assertForbidden();
+        $this->actingAs($this->student)
+            ->postJson(route('enrollments.goals.store', $this->enrollment), ['title' => '修了後の目標'])
+            ->assertForbidden();
+        $this->actingAs($this->student)->get(route('enrollment-goals.edit', $goal))->assertForbidden();
+        $this->actingAs($this->student)
+            ->patchJson(route('enrollment-goals.update', $goal), ['title' => '更新'])
+            ->assertForbidden();
+        $this->actingAs($this->student)->postJson(route('enrollment-goals.markAchieved', $goal))->assertForbidden();
+        $this->actingAs($this->student)->deleteJson(route('enrollment-goals.destroy', $goal))->assertForbidden();
+
+        $this->assertDatabaseCount('enrollment_goals', 1);
+        $this->assertSame($goal->title, $goal->fresh()->title);
     }
 
     public function test_can_add_goal_even_when_enrollment_is_passed(): void

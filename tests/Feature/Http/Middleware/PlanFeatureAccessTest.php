@@ -7,6 +7,7 @@ namespace Tests\Feature\Http\Middleware;
 use App\Models\Enrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -14,7 +15,8 @@ use Tests\TestCase;
  *
  * - 修了(graduated)などの受講中以外の受講生はプラン機能で 403
  * - 受講中の受講生は従来どおり利用できる
- * - プロフィール / ダッシュボード / 受講登録の閲覧はガード対象外で、修了後も利用できる
+ * - 受講登録の詳細(個人目標の一覧を含む)も修了後は 403(PM 確認の回答)。コーチ / 管理者は影響を受けない
+ * - プロフィール / ダッシュボード / 受講登録の一覧はガード対象外で、修了後も利用できる
  */
 class PlanFeatureAccessTest extends TestCase
 {
@@ -49,6 +51,7 @@ class PlanFeatureAccessTest extends TestCase
             '面談予約' => route('meetings.create', $enrollment),
             'チャット' => route('chat.index'),
             '質問掲示板' => route('qa-board.index'),
+            '受講登録の詳細(個人目標を含む)' => route('enrollments.show', $enrollment),
         ];
     }
 
@@ -76,15 +79,46 @@ class PlanFeatureAccessTest extends TestCase
         $this->actingAs($student)->get(route('learning.enrollments.show', $enrollment))->assertOk();
     }
 
-    public function test_graduated_student_can_still_open_profile_dashboard_and_enrollments(): void
+    public function test_graduated_student_can_still_open_profile_dashboard_and_enrollment_index(): void
     {
         $student = User::factory()->student()->graduated()->create();
-        $enrollment = Enrollment::factory()->passed()->for($student)->create();
+        Enrollment::factory()->passed()->for($student)->create();
 
         $this->actingAs($student)->get(route('settings.profile.edit'))->assertOk();
         $this->actingAs($student)->get(route('dashboard.index'))->assertOk();
         $this->actingAs($student)->get(route('enrollments.index'))->assertOk();
+    }
+
+    public function test_graduated_student_cannot_open_enrollment_detail_even_when_passed(): void
+    {
+        $student = User::factory()->student()->graduated()->create();
+        $enrollment = Enrollment::factory()->passed()->for($student)->create();
+
+        $this->actingAs($student)->get(route('enrollments.show', $enrollment))->assertForbidden();
+    }
+
+    public function test_in_progress_student_can_open_enrollment_detail(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $enrollment = Enrollment::factory()->learning()->for($student)->create();
+
         $this->actingAs($student)->get(route('enrollments.show', $enrollment))->assertOk();
+    }
+
+    public function test_coach_and_admin_can_open_enrollment_detail_regardless_of_student_status(): void
+    {
+        $student = User::factory()->student()->graduated()->create();
+        $enrollment = Enrollment::factory()->passed()->for($student)->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $admin = User::factory()->admin()->inProgress()->create();
+        $enrollment->certification->coaches()->attach($coach->id, [
+            'id' => (string) Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $this->actingAs($coach)->get(route('enrollments.show', $enrollment))->assertOk();
+        $this->actingAs($admin)->get(route('enrollments.show', $enrollment))->assertOk();
     }
 
     public function test_graduated_student_cannot_post_to_plan_features(): void
