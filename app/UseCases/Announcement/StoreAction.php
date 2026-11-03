@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\UseCases\Announcement;
 
 use App\Enums\AnnouncementTargetType;
+use App\Enums\EnrollmentStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Exceptions\Announcement\AnnouncementNoRecipientsException;
@@ -65,6 +66,7 @@ final class StoreAction
 
     /**
      * 配信対象の受講生。どのタイプでも受講中(in_progress)の受講生だけに絞る(コーチ・管理者・卒業・退会は対象外)。
+     * 資格指定は、指定資格の受講登録が「学習中」(learning)の受講生だけを対象にする(修了・学習中止は対象外 / PM 確認済み)。
      *
      * @return Collection<int, User>
      */
@@ -79,7 +81,8 @@ final class StoreAction
             AnnouncementTargetType::AllStudents => null,
             AnnouncementTargetType::Certification => $query->whereHas(
                 'enrollments',
-                fn ($q) => $q->where('certification_id', $certificationId),
+                fn ($q) => $q->where('certification_id', $certificationId)
+                    ->where('status', EnrollmentStatus::Learning->value),
             ),
             AnnouncementTargetType::User => $query->whereKey($userId),
         };
