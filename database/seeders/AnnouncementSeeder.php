@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\AnnouncementTargetType;
+use App\Enums\EnrollmentStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\Announcement;
@@ -47,7 +48,11 @@ final class AnnouncementSeeder extends Seeder
             now()->subDays(3)->setTime(10, 0),
         );
 
-        $enrollment = Enrollment::query()->where('user_id', $student->id)->with('certification')->first();
+        $enrollment = Enrollment::query()
+            ->where('user_id', $student->id)
+            ->where('status', EnrollmentStatus::Learning->value)
+            ->with('certification')
+            ->first();
         if ($enrollment !== null) {
             $this->dispatch(
                 $admin,
@@ -57,7 +62,11 @@ final class AnnouncementSeeder extends Seeder
                     'target_type' => AnnouncementTargetType::Certification,
                     'target_certification_id' => $enrollment->certification_id,
                 ],
-                $this->students()->whereHas('enrollments', fn ($q) => $q->where('certification_id', $enrollment->certification_id)),
+                $this->students()->whereHas(
+                    'enrollments',
+                    fn ($q) => $q->where('certification_id', $enrollment->certification_id)
+                        ->where('status', EnrollmentStatus::Learning->value),
+                ),
                 now()->subDays(2)->setTime(15, 30),
             );
         }

@@ -17,9 +17,10 @@ use Tests\TestCase;
  * `POST /admin/announcements`(運営お知らせの配信)の検証。
  *
  * - 全受講生 / 資格指定 / ユーザー指定の 3 タイプで、受講中の受講生だけに届く
+ * - 資格指定は、指定資格を「学習中」で受講登録している受講生だけに届く(修了・学習中止・別資格のみは対象外)
  * - コーチ・管理者・招待中・卒業・退会には届かない
  * - アプリ内通知とメールの両方で届き、配信件数・配信日時・配信者が記録される
- * - 対象 0 名は配信しない / 入力バリデーション / admin 以外は 403
+ * - 対象 0 名(資格指定で修了・学習中止しかいない場合を含む)は配信しない / 入力バリデーション / admin 以外は 403
  */
 class StoreTest extends TestCase
 {
@@ -78,18 +79,22 @@ class StoreTest extends TestCase
         }
     }
 
-    public function test_certification_target_reaches_only_enrolled_in_progress_students(): void
+    public function test_certification_target_reaches_only_learning_enrolled_in_progress_students(): void
     {
         Notification::fake();
         $admin = User::factory()->admin()->create();
         $certification = Certification::factory()->published()->create();
         $otherCertification = Certification::factory()->published()->create();
-        $enrolled = User::factory()->student()->inProgress()->create();
+        $learning = User::factory()->student()->inProgress()->create();
+        $passed = User::factory()->student()->inProgress()->create();
+        $failed = User::factory()->student()->inProgress()->create();
         $enrolledGraduated = User::factory()->student()->graduated()->create();
         $notEnrolled = User::factory()->student()->inProgress()->create();
-        Enrollment::factory()->for($enrolled)->for($certification)->create();
-        Enrollment::factory()->for($enrolledGraduated)->for($certification)->create();
-        Enrollment::factory()->for($notEnrolled)->for($otherCertification)->create();
+        Enrollment::factory()->for($learning)->for($certification)->learning()->create();
+        Enrollment::factory()->for($passed)->for($certification)->passed()->create();
+        Enrollment::factory()->for($failed)->for($certification)->failed()->create();
+        Enrollment::factory()->for($enrolledGraduated)->for($certification)->learning()->create();
+        Enrollment::factory()->for($notEnrolled)->for($otherCertification)->learning()->create();
 
         $this->actingAs($admin)->post(route('admin.announcements.store'), $this->payload([
             'target_type' => 'certification',
@@ -101,9 +106,35 @@ class StoreTest extends TestCase
         $this->assertSame($certification->id, $announcement->target_certification_id);
         $this->assertNull($announcement->target_user_id);
         $this->assertSame(1, $announcement->dispatched_count);
-        Notification::assertSentTo($enrolled, AdminAnnouncementNotification::class);
+        Notification::assertSentTo($learning, AdminAnnouncementNotification::class);
+        // 修了・学習中止は、ユーザー全体が受講中でも対象外(PM 確認済み)
+        Notification::assertNotSentTo($passed, AdminAnnouncementNotification::class);
+        Notification::assertNotSentTo($failed, AdminAnnouncementNotification::class);
         Notification::assertNotSentTo($enrolledGraduated, AdminAnnouncementNotification::class);
         Notification::assertNotSentTo($notEnrolled, AdminAnnouncementNotification::class);
+    }
+
+    public function test_certification_target_with_learning_in_other_cert_and_passed_in_target_is_excluded(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->admin()->create();
+        $certification = Certification::factory()->published()->create();
+        $otherCertification = Certification::factory()->published()->create();
+        $learning = User::factory()->student()->inProgress()->create();
+        // 指定資格は修了済み・別資格を学習中の受講生(別資格の「学習中」で対象に入らないこと)
+        $passedHereLearningElsewhere = User::factory()->student()->inProgress()->create();
+        Enrollment::factory()->for($learning)->for($certification)->learning()->create();
+        Enrollment::factory()->for($passedHereLearningElsewhere)->for($certification)->passed()->create();
+        Enrollment::factory()->for($passedHereLearningElsewhere)->for($otherCertification)->learning()->create();
+
+        $this->actingAs($admin)->post(route('admin.announcements.store'), $this->payload([
+            'target_type' => 'certification',
+            'target_certification_id' => $certification->id,
+        ]))->assertRedirect();
+
+        $this->assertSame(1, Announcement::sole()->dispatched_count);
+        Notification::assertSentTo($learning, AdminAnnouncementNotification::class);
+        Notification::assertNotSentTo($passedHereLearningElsewhere, AdminAnnouncementNotification::class);
     }
 
     public function test_user_target_reaches_only_that_student(): void
@@ -167,6 +198,9 @@ class StoreTest extends TestCase
         Notification::fake();
         $admin = User::factory()->admin()->create();
         $certification = Certification::factory()->published()->create();
+        // 指定資格の受講登録が修了・学習中止だけなら、配信対象は 0 名として扱う
+        Enrollment::factory()->for(User::factory()->student()->inProgress()->create())->for($certification)->passed()->create();
+        Enrollment::factory()->for(User::factory()->student()->inProgress()->create())->for($certification)->failed()->create();
 
         $this->actingAs($admin)
             ->from(route('admin.announcements.create'))
